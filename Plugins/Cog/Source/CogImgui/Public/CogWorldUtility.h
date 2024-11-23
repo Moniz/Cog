@@ -80,7 +80,7 @@ namespace CogUtilities
 #else
 
 	template<typename T>
-	constexpr int32 GetWorldContextIndex(const T&)
+	constexpr int32 GetWorldContextId(const T&)
 	{
 		// The only option is standalone game with one context.
 		return STANDALONE_GAME_CONTEXT_INDEX;

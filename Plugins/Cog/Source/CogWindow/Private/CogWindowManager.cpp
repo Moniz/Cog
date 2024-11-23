@@ -9,6 +9,7 @@
 #include "CogWindowHelper.h"
 #include "CogWindowModule.h"
 #include "CogWindowWidgets.h"
+#include "CogWindow_NetImgui.h"
 #include "Engine/Engine.h"
 #include "GameFramework/PlayerInput.h"
 #include "HAL/IConsoleManager.h"
@@ -24,12 +25,9 @@ void UCogWindowManager::PostInitProperties()
 {
     Super::PostInitProperties();
 
-    if (bRegisterDefaultCommands)
+    if (bRegisterDefaultCommands && !bRegisteredDefaultCommands)
     {
-        if (RegisterDefaultCommandBindings())
-        {
-            bRegisterDefaultCommands = false;
-        }
+        RegisterDefaultCommandBindings();
     }
 }
 
@@ -56,6 +54,7 @@ void UCogWindowManager::InitializeInternal()
 
     LayoutsWindow = AddWindow<FCogWindow_Layouts>("Window.Layouts", false);
     SettingsWindow = AddWindow<FCogWindow_Settings>("Window.Settings", false);
+    NetImguiWindow = AddWindow<FCogWindow_NetImgui>("Window.NetImgui", false);
 
     if (FCogWindowModule* Module = FModuleManager::GetModulePtr<FCogWindowModule>("CogWindow"))
     {
@@ -77,6 +76,26 @@ void UCogWindowManager::InitializeInternal()
     }
 
     IsInitialized = true;
+
+    FString Host;
+    const bool bShouldConnect = FParse::Value(FCommandLine::Get(), TEXT("-ImGuiHost="), Host) && !Host.IsEmpty();
+
+    uint16 Port = bShouldConnect ? 8888 : 8889;
+    const bool bShouldListen = FParse::Value(FCommandLine::Get(), TEXT("-ImGuiPort="), Port) && Port != 0;
+
+    if (!bShouldConnect)
+    {
+        // Bind consecutive listen ports for PIE sessions
+        Port += Context.GetWorldContextId() + 1;
+    }
+
+    if ((bShouldConnect && !Context.Connect(Host, Port)) || (bShouldListen && !Context.Listen(Port)))
+    {
+        // Failed to Connect
+        UE_LOG(LogCogImGui, Error,
+            TEXT("UCogWindowManager::InitializeInternal NetImgui Connection Failed on Host %s and Port %i"),
+            *Host, Port);
+    }
 }
 
 //--------------------------------------------------------------------------------------------------------------------------
@@ -358,6 +377,8 @@ void UCogWindowManager::RenderMainMenu()
             RenderMenuItem(*LayoutsWindow, "Layouts");
 
             RenderMenuItem(*SettingsWindow, "Settings");
+            
+            RenderMenuItem(*NetImguiWindow, "NetImgui");
 
             if (ImGui::BeginMenu("Spacing"))
             {
@@ -726,6 +747,8 @@ bool UCogWindowManager::RegisterDefaultCommandBindings()
     {
         UE_LOG(LogCogImGui, Warning, TEXT("%s Failed : No PlayerInput found"), ANSI_TO_TCHAR(__FUNCTION__));
     }
+
+    bRegisteredDefaultCommands = bDefaultCommandBindingsRegistered;
 
     return bDefaultCommandBindingsRegistered;
 }

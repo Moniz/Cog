@@ -22,6 +22,9 @@
 #include "Widgets/SViewport.h"
 #include "Widgets/SWindow.h"
 
+#define NETIMGUI_IMPLEMENTATION
+#include <NetImgui_Api.h>
+
 static UPlayerInput* GetPlayerInput(const UWorld* World);
 
 //--------------------------------------------------------------------------------------------------------------------------
@@ -47,11 +50,13 @@ void FCogImguiContext::Initialize(UWorld* World)
     WorldContextId = CogUtilities::GetWorldContextId(World);
     ImGuiContext = ImGui::CreateContext();
     PlotContext = ImPlot::CreateContext();
-    ImPlot::SetImGuiContext(ImGuiContext);
-
+    
     InputHandler.Initialize(this);
 
+    ImPlot::SetImGuiContext(ImGuiContext);
     ImGui::SetCurrentContext(ImGuiContext);
+    
+    NetImgui::Startup();
 
     ImGuiIO& IO = ImGui::GetIO();
     IO.UserData = this;
@@ -83,6 +88,13 @@ void FCogImguiContext::Initialize(UWorld* World)
     const auto InitFilenameTemp = StringCast<ANSICHAR>(*FCogImguiHelper::GetIniFilePath("imgui"));
     ImStrncpy(IniFilename, InitFilenameTemp.Get(), IM_ARRAYSIZE(IniFilename));
     IO.IniFilename = IniFilename;
+    
+    // Ensure each PIE session has a uniquely identifiable context
+    const FString ContextName = (WorldContextId > 0 ? FString::Printf(TEXT("ImGui_%d"), WorldContextId) : TEXT("ImGui"));
+
+    const FString LogFilename = FPaths::ProjectLogDir() / ContextName + TEXT(".log");
+    FPlatformString::Convert(reinterpret_cast<UTF8CHAR*>(LogFilenameUtf8), UE_ARRAY_COUNT(LogFilenameUtf8), *LogFilename, LogFilename.Len() + 1);
+    IO.LogFilename = LogFilenameUtf8;
 
     ImGuiPlatformIO& PlatformIO = ImGui::GetPlatformIO();
     PlatformIO.Platform_CreateWindow = ImGui_CreateWindow;
@@ -137,6 +149,8 @@ void FCogImguiContext::Shutdown()
     GameViewport->RemoveViewportWidgetContent(MainWidget.ToSharedRef());
     GameViewport->RemoveViewportWidgetContent(InputCatcherWidget.ToSharedRef());
 
+    NetImgui::Shutdown();
+    
     if (ImGuiContext)
     {
         SetAsCurrent();
@@ -204,6 +218,11 @@ bool FCogImguiContext::BeginFrame(float InDeltaTime)
     if (bIsFirstFrame)
     {
         bIsFirstFrame = false;
+        return false;
+    }
+
+    if (ImGuiContext->WithinFrameScope || (bNetImGuiConnectRequested && !NetImgui::IsConnected()))
+    {
         return false;
     }
 
@@ -313,6 +332,65 @@ void FCogImguiContext::EndFrame()
 
     ImGui::UpdatePlatformWindows();
     ImGui::RenderPlatformWindowsDefault();
+}
+
+//--------------------------------------------------------------------------------------------------------------------------
+bool FCogImguiContext::IsConnectedToNetImGui() const
+{
+    return NetImgui::IsConnected();
+}
+
+//--------------------------------------------------------------------------------------------------------------------------
+bool FCogImguiContext::Listen(int16 Port)
+{
+    SetAsCurrent();
+    // TODO: Switch back when out of scope of this function?
+
+    TAnsiStringBuilder<128> ClientName;
+    ClientName << FApp::GetProjectName();
+
+    const int32 PieSessionId = WorldContextId;
+
+    if (PieSessionId > 0)
+    {
+        ClientName << " (" << PieSessionId << ")";
+    }
+
+    NetImgui::ConnectFromApp(ClientName.ToString(), Port);
+    bNetImGuiConnectRequested = true;
+
+    return bNetImGuiConnectRequested;
+}
+
+//--------------------------------------------------------------------------------------------------------------------------
+bool FCogImguiContext::Connect(const FString& Host, int16 Port)
+{
+    SetAsCurrent();
+    // TODO: Switch back when out of scope of this function?
+
+    TAnsiStringBuilder<128> ClientName;
+    ClientName << FApp::GetProjectName();
+
+    const int32 PieSessionId = WorldContextId;
+    if (PieSessionId > 0)
+    {
+        ClientName << " (" << PieSessionId << ")";
+    }
+
+    NetImgui::ConnectToApp(ClientName.ToString(), TCHAR_TO_ANSI(*Host), Port);
+    bNetImGuiConnectRequested = true;
+    
+    return bNetImGuiConnectRequested;
+}
+
+//--------------------------------------------------------------------------------------------------------------------------
+void FCogImguiContext::Disconnect()
+{
+    if (bNetImGuiConnectRequested)
+    {
+        NetImgui::Disconnect();
+        bNetImGuiConnectRequested = false;
+    }
 }
 
 //--------------------------------------------------------------------------------------------------------------------------

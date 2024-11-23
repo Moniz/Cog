@@ -6,6 +6,7 @@
 #include "imgui.h"
 #include "CogWindowManager.generated.h"
 
+class FCogWindow_NetImgui;
 class UCogCommonConfig;
 class FCogWindow;
 class FCogWindow_Layouts;
@@ -127,6 +128,8 @@ protected:
     UPROPERTY(Config)
     bool bRegisterDefaultCommands = true;
 
+    bool bRegisteredDefaultCommands = false;
+
     FCogImguiContext Context;
 
     TArray<FCogWindow*> Windows;
@@ -140,6 +143,8 @@ protected:
     FCogWindow_Settings* SettingsWindow = nullptr;
 
     FCogWindow_Layouts* LayoutsWindow = nullptr;
+    
+    FCogWindow_NetImgui* NetImguiWindow = nullptr;
 
     FMenu MainMenu;
 

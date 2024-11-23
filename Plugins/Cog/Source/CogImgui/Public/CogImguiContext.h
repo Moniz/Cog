@@ -68,6 +68,19 @@ public:
 
 	void EndFrame();
 
+	bool IsConnectedToNetImGui() const;
+
+	// Listen for remote connections
+	bool Listen(int16 Port);
+
+	// Connects to a remote host
+	bool Connect(const FString& Host, int16 Port);
+
+	// Closes All remote connections
+	void Disconnect();
+
+	int32 GetWorldContextId() const { return WorldContextId; }
+
 	float GetDpiScale() const { return DpiScale; }
 
 	void SetDPIScale(float Value);
@@ -144,6 +157,10 @@ private:
 	ImPlotContext* PlotContext = nullptr;
 
 	char IniFilename[512] = {};
+	
+	char LogFilenameUtf8[512] = {};
+	
+	bool bNetImGuiConnectRequested = false;
 
 	bool bEnableInput = false;
 
